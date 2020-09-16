@@ -86,13 +86,42 @@ Setup in R
 
 1.  Load the `data.table` (and the `dtplyr` and `dplyr` packages if you plan to work with those).
 
-2.  Load the met data from <https://raw.githubusercontent.com/USCbiostats/data-science-data/master/02_met/met_all.gz>, and also the station data. For the later, you can use the code we used during lecture to pre-process the stations data:
+``` r
+library(data.table)
+library(dplyr)
+```
+
+    ## 
+    ## Attaching package: 'dplyr'
+
+    ## The following objects are masked from 'package:data.table':
+    ## 
+    ##     between, first, last
+
+    ## The following objects are masked from 'package:stats':
+    ## 
+    ##     filter, lag
+
+    ## The following objects are masked from 'package:base':
+    ## 
+    ##     intersect, setdiff, setequal, union
+
+``` r
+download.file("https://raw.githubusercontent.com/USCbiostats/data-science-data/master/02_met/met_all.gz", "met_all.gz", method="libcurl", timeout = 60)
+met <- data.table::fread("met_all.gz")
+```
+
+1.  Load the met data from <https://raw.githubusercontent.com/USCbiostats/data-science-data/master/02_met/met_all.gz>, and also the station data. For the later, you can use the code we used during lecture to pre-process the stations data:
 
 ``` r
 # Download the data
 stations <- fread("ftp://ftp.ncdc.noaa.gov/pub/data/noaa/isd-history.csv")
 stations[, USAF := as.integer(USAF)]
+```
 
+    ## Warning in eval(jsub, SDenv, parent.frame()): NAs introduced by coercion
+
+``` r
 # Dealing with NAs and 999999
 stations[, USAF   := fifelse(USAF == 999999, NA_integer_, USAF)]
 stations[, CTRY   := fifelse(CTRY == "", NA_character_, CTRY)]
@@ -111,10 +140,70 @@ stations <- stations[n == 1,][, n := NULL]
 
 1.  Merge the data as we did during the lecture.
 
+``` r
+met <- merge(
+  x=met, y=stations, 
+  by.x="USAFID", by.y="USAF",
+  all.x=TRUE, all.y=FALSE
+  )
+# Print out a sample of data
+met[1:5, .(USAFID, WBAN, STATE)]
+```
+
+    ##    USAFID  WBAN STATE
+    ## 1: 690150 93121    CA
+    ## 2: 690150 93121    CA
+    ## 3: 690150 93121    CA
+    ## 4: 690150 93121    CA
+    ## 5: 690150 93121    CA
+
 Question 1: Representative station for the US
 ---------------------------------------------
 
 What is the median station in terms of temperature, wind speed, and atmospheric pressure? Look for the three weather stations that best represent continental US using the `quantile()` function. Do these three coincide?
+
+``` r
+# obtaining averages per station
+met_stations <- met[, .(
+    wind.sp   = mean(wind.sp, na.rm = TRUE),
+    atm.press = mean(atm.press, na.rm = TRUE),
+    temp      = mean(temp, na.rm = TRUE)
+  ), by = USAFID]
+
+# Computing the median
+met_stations[, temp50   := quantile(temp, probs = .5, na.rm = TRUE)]
+met_stations[, atmp50   := quantile(atm.press, probs = .5, na.rm = TRUE)]
+met_stations[, windsp50 := quantile(wind.sp, probs = .5, na.rm = TRUE)]
+
+# Filtering the data
+met_stations[which.min(abs(temp - temp50))]
+```
+
+    ##    USAFID  wind.sp atm.press     temp   temp50   atmp50 windsp50
+    ## 1: 720458 1.209682       NaN 23.68173 23.68406 1014.691 2.461838
+
+``` r
+##    USAFID  wind.sp atm.press     temp   temp50   atmp50 windsp50
+## 1: 720458 1.209682       NaN 23.68173 23.68406 1014.691 2.461838
+met_stations[which.min(abs(atm.press - atmp50))]
+```
+
+    ##    USAFID  wind.sp atm.press     temp   temp50   atmp50 windsp50
+    ## 1: 722238 1.472656  1014.691 26.13978 23.68406 1014.691 2.461838
+
+``` r
+##    USAFID  wind.sp atm.press     temp   temp50   atmp50 windsp50
+## 1: 722238 1.472656  1014.691 26.13978 23.68406 1014.691 2.461838
+met_stations[which.min(abs(wind.sp - windsp50))]
+```
+
+    ##    USAFID  wind.sp atm.press     temp   temp50   atmp50 windsp50
+    ## 1: 720929 2.461838       NaN 17.43278 23.68406 1014.691 2.461838
+
+``` r
+##    USAFID  wind.sp atm.press     temp   temp50   atmp50 windsp50
+## 1: 720929 2.461838       NaN 17.43278 23.68406 1014.691 2.461838
+```
 
 Knit the document, commit your changes, and Save it on GitHub. Don't forget to add `README.md` to the tree, the first time you render it.
 
