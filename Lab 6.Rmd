@@ -1,0 +1,118 @@
+---
+title: "Lab 6"
+author: "Maria Bolshakova"
+date: "9/23/2020"
+output: github_document
+---
+## Read in data
+```{r, echo=TRUE, message=FALSE}
+download.file("https://raw.githubusercontent.com/USCbiostats/data-science-data/master/00_mtsamples/mtsamples.csv", "mtsamples.csv", method="libcurl", timeout = 60)
+met <- data.table::fread("mtsamples.csv")
+library(dplyr)
+library(ggplot2)
+library(tidytext)
+```
+
+## Question 1: What are the different specialties?
+
+```{r}
+##Had to rename variables because data was read in weird, also had to delete first row because it was the variable names.
+mtsamples <- rename(met, id=V1, description=V2, medical_specialty=V3, sample_name=V4, transcription=V5, keywords=V6)
+
+mtsamples <- mtsamples[-c(1),] 
+
+mtsamples$transcription[1]
+mtsamples %>%
+  count(medical_specialty, sort=TRUE)
+##Surgery has the highest count
+
+```
+
+## Question 2: Tokenize the the words in the transcription column, Count the number of times each token appears, Visualize the top 20 most frequent words
+
+```{r}
+library(tidyr)
+library(forcats)
+mtsamples %>%
+  unnest_tokens(token, transcription)%>%
+  count(token, sort=TRUE)%>%
+  top_n(n=20, wt=n)%>%
+ggplot(aes(x=n, y=fct_reorder(token, n)))+
+  geom_col()
+
+##Mostly stopwords that are the most frequent
+```
+
+## Question 3: Remove stopwords
+
+```{r}
+mtsamples %>%
+  unnest_tokens(token2, transcription) %>%
+  anti_join(stop_words, by = c("token2" = "word")) %>%
+  #eliminating stopwords
+  
+  #counting the top and visualizing it with barchart
+  count(token2, sort = TRUE)%>%
+ top_n(n=20, wt=n)%>%
+ggplot(aes(x=n, y=fct_reorder(token2, n)))+
+  geom_col()
+
+##Words like patient
+```
+
+## Question 4: Tokenize into bi-grams
+```{r}
+
+mtsamples %>%
+  unnest_ngrams(output= token, input= transcription, n=2) %>%
+  count(token, sort = TRUE)%>%
+  top_n(n=20, wt=n)
+
+```
+
+##Question 5: Use seperate function
+```{r}
+
+mt2<- mtsamples %>%
+  unnest_ngrams(output= token, input= transcription, n=2) %>%
+  separate(col=token, into=c("word1", "word2"), sep = " ")%>%
+  select(word1, word2)
+
+mt2 %>%
+  filter(word1=="blood") %>%
+  count(word2, sort=TRUE)
+
+mt2 %>%
+  filter(word2=="blood") %>%
+  count(word1, sort=TRUE)
+
+## pressure, cell, and loss tend to appear after the word blood. Estimated, white, signs, appears before blood
+
+#Getting ride of stop words in this ngram dataset
+
+mt2%>%
+  anti_join(
+    tidytext::stop_words %>% select(word), by = c("word1" = "word")
+  )%>%
+  anti_join(
+    tidytext::stop_words %>% select(word), by = c("word2" = "word")
+  )%>%
+  count(word1, word2, sort=TRUE)
+```
+
+##Question 6 - Which words are used most in each of the specialties
+
+```{r}
+mtsamples %>%
+  unnest_tokens(token, transcription)%>%
+  anti_join(tidytext::stop_words, by=c("token" = "word"))%>%
+  group_by(medical_specialty)%>%
+  count(token)%>%
+  top_n(1, n)
+
+##Mostly patient, also history and tumor
+```
+
+
+
+
